@@ -1,0 +1,72 @@
+Inside the VM
+•	Open the “terminal” and run commands: 
+
+(I)	Install Required Packages
+$ sudo apt-get update -y
+$ sudo apt-get install -y protobuf-compiler
+$ sudo apt-get install -y libgtest-dev
+$ sudo apt-get install -y protoc-gen-go
+$ sudo apt-get install -y golang-go
+$ sudo apt-get install -y libmbedtls-dev
+$ sudo apt-get install -y libssl-dev uuid-dev python3-pip swig
+
+(II)	Install Dependencies:
+sudo apt-get install -y golang-go libmbedtls-dev libssl-dev uuid-dev python3-pip swig build-essential cmake git gcc g++ make python3
+
+(III)	Install the prerequisites: 
+sudo apt-get update
+sudo apt-get install -y build-essential cmake git gcc g++ make golang-go python3 python3-pip libssl-dev
+
+(IV)	Clone the Repository:
+git clone https://github.com/ccc-certifier-framework/certifier-framework-for-confidential-computing.git
+
+cd certifier-framework-for-confidential-computing
+go install google.golang.org/protobuf/cmd/protoc-gen-go@latest
+go install google.golang.org/grpc/cmd/protoc-gen-go-grpc@latest
+export PATH="$PATH:$(go env GOPATH)/bin"
+echo 'export PATH="$PATH:$(go env GOPATH)/bin"' >> ~/.bashrc
+source ~/.bashrc
+
+(V)	Build Utilities
+cd utilities
+make -f cert_utility.mak
+make -f policy_utilities.mak
+
+ 
+
+(VI)	Enable Go Modules & Build the Certifier Service
+cd ../certifier_service
+export GO111MODULE=on
+echo 'export GO111MODULE=on' >> ~/.bashrc
+source ~/.bashrc
+go mod tidy
+go build simpleserver.go
+
+
+
+(VII)	Build Example Application
+cd ../sample_apps/simple_app
+make -f example_app.mak
+
+(VIII)	Provision and Configure the Example App
+mkdir provisioning
+cd provisioning
+../utilities/cert_utility.exe --operation=generate-policy-key-and-test-keys \ --policy_key_output_file=policy_key_file.bin \ --policy_cert_output_file=policy_cert_file.bin \ --platform_key_output_file=platform_key_file.bin \ --attest_key_output_file=attest_key_file.bin
+../utilities/embed_policy_key.exe --input=policy_cert_file.bin --output=../policy_key.cc
+
+(IX)	Obtain the Measurement of Trusted Application
+
+../utilities/measurement_utility.exe --type=hash \ --input=../example_app.exe \ --output=example_app.measurement
+
+(X)	Create Signed Policies
+../utilities/make_unary_vse_clause.exe --key_subject=platform_key_file.bin \ --verb="is-trusted-for-attestation" \ --output=ts1.bin
+../utilities/make_indirect_vse_clause.exe --key_subject=policy_key_file.bin \ --verb="says" \ --clause=ts1.bin \ --output=vse_policy1.bin
+../utilities/make_signed_claim_from_vse_clause.exe --vse_file=vse_policy1.bin \ --duration=9000 \ --private_key_file=policy_key_file.bin \ --output=signed_claim_1.bin
+../utilities/package_claims.exe --input=signed_claim_1.bin \ --output=policy.bin
+
+(XI)	Run the Certifier Service
+cd ../../certifier_service
+./simpleserver --policyFile=policy.bin --readPolicy=true
+
+By now, the Certifier Framework is set up and running successfully in the VM. You prepared the environment by installing necessary dependencies, cloning the framework repository, and compiling its core components, including utilities and the Certifier Service. You then provisioned the framework by generating cryptographic keys, creating trust policies, and embedding a policy key into the example application. 
+Following this, you authored and signed trust policies, combining them into a single policy file (policy.bin) to define the framework's trust relationships. Finally, you started the Certifier Service (simpleserver), which is now operational and ready to enforce policies and evaluate trust for connected applications. At this point, the Certifier Framework is fully functional and prepared for use in trusted communication scenarios.
